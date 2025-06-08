@@ -1,4 +1,6 @@
-requests_cache
+aiohttp_client_cache
+aiofiles
+aiosqlite
 
 bs4
 

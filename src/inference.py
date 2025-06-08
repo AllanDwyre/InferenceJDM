@@ -3,8 +3,6 @@ from rich import print as rprint
 import src.logger as log
 
 import asyncio
-import aiohttp
-from typing import List
 
 from statistics import harmonic_mean
 from dataclasses import dataclass
@@ -70,17 +68,17 @@ class RelationInferer:
 		params = self.default_params.copy()
 		params.types_ids = [self.api.get_relation_type_by_name("r_isa").id]
 
-		r_isa_rel = objet.get_relations(params=params).relations
-		r_isa_rel = sorted(r_isa_rel, key=lambda r: r.w, reverse=True)
+		r_isa_rel = await objet.get_relations(params=params)
+		r_isa_rel = sorted(r_isa_rel.relations, key=lambda r: r.w, reverse=True)
 
 		params = self.default_params.copy()
 		params.types_ids = [final_rel_id]
 		
-		inferences: list[Inference] = []
-		for rel in r_isa_rel:
-			final_rel = sujet.relation_with(rel.objet, params)
-			if final_rel.relations :
-				inferred = Inference(
+
+		async def get_final_rel(rel):
+			final_rel = await sujet.relation_with(rel.objet, params)
+			if final_rel.relations:
+				return Inference(
 					sujet=sujet.name,
 					gen=rel.objet.name,
 					objet=objet.name,
@@ -89,25 +87,29 @@ class RelationInferer:
 					t="isa",
 					rel=final_rel.relations[0].relation_type.name,
 				)
-				inferences.append(inferred)
+			return None
+
+		tasks = [get_final_rel(rel) for rel in r_isa_rel]
+		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
+		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
+
 		return inferences
 
-	def inference_by_specialization(self, sujet: Term, objet: Term, final_rel_id: int):
+	async def inference_by_specialization(self, sujet: Term, objet: Term, final_rel_id: int):
 		params = self.default_params.copy()
 		params.types_ids = [self.api.get_relation_type_by_name("r_hypo").id]
 
-		r_hypo_rel = sujet.get_relations(params=params).relations
-		r_hypo_rel = sorted(r_hypo_rel, key=lambda r: r.w, reverse=True)
+		r_hypo_rel = await sujet.get_relations(params=params)
+		r_hypo_rel = sorted(r_hypo_rel.relations, key=lambda r: r.w, reverse=True)
 		
 		params = self.default_params.copy()
 		params.types_ids = [final_rel_id]
 		
-		inferences: list[Inference] = []
-		for rel in r_hypo_rel:
-			final_rel = rel.objet.relation_with(objet, params)
-			if final_rel.relations :
-				inferred = Inference(
+		async def get_final_rel(rel):
+			final_rel = await rel.objet.relation_with(objet, params)
+			if final_rel.relations:
+				return Inference(
 					sujet=sujet.name,
 					gen=rel.objet.name,
 					objet=objet.name,
@@ -116,134 +118,74 @@ class RelationInferer:
 					t="hypo",
 					rel=final_rel.relations[0].relation_type.name,
 				)
-				inferences.append(inferred)
+			return None
+
+		tasks = [get_final_rel(rel) for rel in r_hypo_rel]
+		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
+		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
+
 		return inferences
 
-	def inference_by_synonyme(self, sujet: Term, objet: Term, final_rel_id: int):
-		params = self.default_params.copy()
-		params.types_ids = [self.api.get_relation_type_by_name("r_syn").id]
-
-		r_hypo_rel = sujet.get_relations(params=params).relations
-		r_hypo_rel = sorted(r_hypo_rel, key=lambda r: r.w, reverse=True)
-		
+	async def inference_by_transitivity(self, sujet: Term, objet: Term, final_rel_id: int):
 		params = self.default_params.copy()
 		params.types_ids = [final_rel_id]
+
+		r_trans_rel = await sujet.get_relations(params=params)
+		r_trans_rel = sorted(r_trans_rel.relations, key=lambda r: r.w, reverse=True)
 		
-		inferences: list[Inference] = []
-		for rel in r_hypo_rel:
-			final_rel = rel.objet.relation_with(objet, params)
-			if final_rel.relations :
-				inferred = Inference(
+		async def get_final_rel(rel):
+			final_rel = await rel.objet.relation_with(objet, params)
+			if final_rel.relations:
+				return Inference(
 					sujet=sujet.name,
 					gen=rel.objet.name,
 					objet=objet.name,
 					weight1=rel.w,
 					weight2=final_rel.relations[0].w,
-					t="syn",
+					t="transitivity",
 					rel=final_rel.relations[0].relation_type.name,
 				)
-				inferences.append(inferred)
+			return None
+
+		tasks = [get_final_rel(rel) for rel in r_trans_rel]
+		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
+		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
+
 		return inferences
+	
+	async def run_all_inferences(self, sujet, objet, rel_id):
+		sujet.api = self.api
+		objet.api = self.api
 
-	def inference_by_lieu(self, sujet: Term, objet: Term, final_rel_id: int):
-		params = self.default_params.copy()
-		params.types_ids = [self.api.get_relation_type_by_name("r_lieu").id]
-
-		r_hypo_rel = sujet.get_relations(params=params).relations
-		r_hypo_rel = sorted(r_hypo_rel, key=lambda r: r.w, reverse=True)
+		tasks = [
+			self.inference_by_generalization(sujet, objet, rel_id),
+			self.inference_by_specialization(sujet, objet, rel_id),
+			self.inference_by_transitivity(sujet, objet, rel_id),
+		]
 		
-		params = self.default_params.copy()
-		params.types_ids = [final_rel_id]
+		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
-		inferences: list[Inference] = []
-		for rel in r_hypo_rel:
-			final_rel = rel.objet.relation_with(objet, params)
-			if final_rel.relations :
-				inferred = Inference(
-					sujet=sujet.name,
-					gen=rel.objet.name,
-					objet=objet.name,
-					weight1=rel.w,
-					weight2=final_rel.relations[0].w,
-					t="syn",
-					rel=final_rel.relations[0].relation_type.name,
-				)
-				inferences.append(inferred)
+		inferences = []
+		for result in results:
+			if isinstance(result, Exception):
+				print(f"Erreur: {result}")
+			else:
+				inferences.extend(result)
 		
 		return inferences
 	
-	def inference_by_holo(self, sujet: Term, objet: Term, final_rel_id: int):
-		params = self.default_params.copy()
-		params.types_ids = [self.api.get_relation_type_by_name("r_holo").id]
-
-		r_hypo_rel = sujet.get_relations(params=params).relations
-		r_hypo_rel = sorted(r_hypo_rel, key=lambda r: r.w, reverse=True)
-		
-		params = self.default_params.copy()
-		params.types_ids = [final_rel_id]
-		
-		inferences: list[Inference] = []
-		for rel in r_hypo_rel:
-			final_rel = rel.objet.relation_with(objet, params)
-			if final_rel.relations :
-				inferred = Inference(
-					sujet=sujet.name,
-					gen=rel.objet.name,
-					objet=objet.name,
-					weight1=rel.w,
-					weight2=final_rel.relations[0].w,
-					t="syn",
-					rel=final_rel.relations[0].relation_type.name,
-				)
-				inferences.append(inferred)
-		
-		return inferences
-	
-	def inference_by_has_part(self, sujet: Term, objet: Term, final_rel_id: int):
-		params = self.default_params.copy()
-		params.types_ids = [self.api.get_relation_type_by_name("r_has_part").id]
-
-		r_hypo_rel = sujet.get_relations(params=params).relations
-		r_hypo_rel = sorted(r_hypo_rel, key=lambda r: r.w, reverse=True)
-		
-		params = self.default_params.copy()
-		params.types_ids = [final_rel_id]
-		
-		inferences: list[Inference] = []
-		for rel in r_hypo_rel:
-			final_rel = rel.objet.relation_with(objet, params)
-			if final_rel.relations :
-				inferred = Inference(
-					sujet=sujet.name,
-					gen=rel.objet.name,
-					objet=objet.name,
-					weight1=rel.w,
-					weight2=final_rel.relations[0].w,
-					t="syn",
-					rel=final_rel.relations[0].relation_type.name,
-				)
-				inferences.append(inferred)
-		
-		return inferences
-
-	
-	def run(self, sujet_name:str, relation_name:str, objet_name:str) -> None:
+	async def run(self, sujet_name:str, relation_name:str, objet_name:str) -> None:
 		"""Run the inference process."""
 		try:
-			sujet, objet = (self.api.fetch_term_by_name(sujet_name), self.api.fetch_term_by_name(objet_name))
+			sujet, objet = (await self.api.fetch_term_by_name(sujet_name), await self.api.fetch_term_by_name(objet_name))
 			rel_id = self.api.get_relation_type_by_name(relation_name).id
 
 		except Exception as e:
-			return
-		
-		inferences = self.inference_by_generalization(sujet, objet, rel_id)
-		inferences.extend(self.inference_by_specialization(sujet, objet, rel_id))
-		inferences.extend(self.inference_by_has_part(sujet, objet, rel_id))
-		inferences.extend(self.inference_by_lieu(sujet, objet, rel_id))
-		inferences.extend(self.inference_by_holo(sujet, objet, rel_id))
-		inferences.extend(self.inference_by_synonyme(sujet, objet, rel_id))
+			rprint(f"[red] Erreur lors de l'initialisation: {e}[/red]")
+			raise e		
+		inferences = await self.run_all_inferences(sujet, objet, rel_id)
 
 		if len(inferences) == 0:
 			self.logger.render_inferences(inferences)
@@ -253,14 +195,14 @@ class RelationInferer:
 		inferences = sorted(inferences, key=lambda r: r.score, reverse=True)[:self.limit]
 		
 		self.logger.render_inferences(inferences)
-		
-		# TODO : [ ] Multi-thread pour chaque type
-		# TODO : [ ] Multi-thread pour chaque chemin par type
+	
+		# TODO : [x] Multi-thread pour chaque type
+		# TODO : [x] Multi-thread pour chaque chemin par type
 		# TODO : [ ] Prendre en compte les annotations (pour que ce soit des modifier de notes)
-		# TODO : [ ] Faire les 5 inférences (isa, hypo, ...)
+		# TODO : [ ] Faire les 5 inférences (isa, hypo, transitivity, syn, 
 		# TODO : [ ] Faire un meilleur formatage
 		# TODO : [x] 2 type de logger un pour le bot, l'autre pour le cli
+		# TODO : [x] Mettre sur github
 
 		# transitive direct, indirect, subjective, inductive
-		# bot discord,
 		# annotation : 

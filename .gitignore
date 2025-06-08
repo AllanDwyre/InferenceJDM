@@ -4,3 +4,6 @@
 .venv
 # pas besoin du cache : 
 database
+
+# Pas besoin du cache
+__pycache__

@@ -101,7 +101,7 @@ class InferenceLoggerBot(InferenceLogger):
 		message = (
 			f"```\n"
 			f"{idx:>3}. ✅ oui | "
-			f"{term1} {inference.rel:<5} {arrow} "
+			f"{term1} {inference.t:<5} {arrow} "
 			f"{inference.gen:<45} {inference.rel} {arrow} "
 			f"{term2} | {score_emoji} {inference.score:<.2f}\n"
 			f"```"
