@@ -1,0 +1,6 @@
+# Pour des raison de sécurité Token Bot : 
+.env
+# pas besoin des dependancy : 
+.venv
+# pas besoin du cache : 
+database

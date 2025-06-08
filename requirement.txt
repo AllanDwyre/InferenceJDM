@@ -1,0 +1,8 @@
+requests_cache
+
+bs4
+
+rich
+
+dotenv
+discord
