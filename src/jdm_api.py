@@ -100,8 +100,44 @@ class Relation:
 	objet: Optional["Term"] = None
 	relation_type: Optional["RelationType"] = None
 
+	annotation: Optional[str] = None
+
 	def __str__(self):
 		return f"{self.sujet.name} ({self.relation_type.gpname}) {self.objet.name} | {self.w}"
+	
+	async def get_annotation(self, api : JdmApi):
+		annotations = await api.fetch_relation_anotation(self.id)
+		if not annotations:
+			return None
+		
+		self.annotation = annotations
+		return self.annotation
+	
+	def get_annotation_weight(self):
+		if not self.annotation:
+			return 1
+		weights = {
+			"impossible": 0.0,
+			"improbable": 0.1,
+			"non souhaitable": 0.15,
+			"incertain": 0.2,
+			"discutable": 0.25,
+			"imaginaire": 0.3,
+			"figuré": 0.35,
+			"peu pertinent": 0.4,
+			"non pertinent": 0.45,
+			"constrastif": 0.5,
+			"en général": 0.55,
+			"sens particulier": 0.6,
+			"souhaitable": 0.65,
+			"pertinent": 0.7,
+			"probable": 0.8,
+			"possible": 0.9,
+			"toujours vrai": 1.0
+		}
+		if self.annotation not in weights:
+			return 1
+		return weights[self.annotation]
 
 @dataclass
 class RelationType:
@@ -185,6 +221,25 @@ class JdmApi:
 			return RelationResult.from_dict(data, api=self)
 		else:
 			print(f"Erreur lors de la récupération des relations de '{term}' (code {response.status})")
+			response.raise_for_status()
+
+	async def fetch_relation_anotation(self, relation_id):
+		response = await self._fetch(f"relations/from/:r{relation_id}")
+		if response.status == 200:
+			data = await response.json()
+			nodes = data.get("nodes", [])
+
+			if not nodes:
+				return None
+			
+			max_node = max(nodes, key=lambda n: n.get("w", 0))
+			return max_node.get("name")
+		elif response.status == 404:
+			return None
+		elif response.status == 500:
+			return None
+		else:
+			print(f"Erreur lors de la récupération de l'annotation de '{relation_id}' (code {response.status})")
 			response.raise_for_status()
 
 	async def fetch_relations_types(self):

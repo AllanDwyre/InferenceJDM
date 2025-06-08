@@ -1,6 +1,9 @@
 from src.jdm_api import EndpointParams, JdmApi, Term
 from rich import print as rprint
+
 import src.logger as log
+import logging
+import traceback
 
 import asyncio
 
@@ -18,13 +21,15 @@ class Inference:
 
 	t 		: str # type d'inférence : isa | hypo | 
 	rel		: str # type de relation : has_part | lieu | ... 
-	score	: float = 0.0
+	score	: float = 0.0,
+
+	annotation_weight1 : float = 1.0,
+	annotation_weight2 : float = 1.0,
 
 
 
 class RelationInferer:
-	def __init__(self, api:JdmApi, limit=10, max_treads_per_type=4, max_thread_per_branch=10,
-			  inferenceLogger = log.InferenceLogger()):
+	def __init__(self, api:JdmApi, limit=10, inferenceLogger = log.InferenceLogger()):
 		"""
         Initialise un inféreur de relations basé sur une trame (sujet, relation, objet) en s'appuyant sur l'API JDM.
 
@@ -37,8 +42,6 @@ class RelationInferer:
         - objet (str) : Terme d'arrivée de la relation.
         - api (JdmApi) : Instance de l'API JDM utilisée pour interroger le graphe lexical.
         - limit (int) : Nombre maximal de résultats à retourner (par défaut : 10).
-        - max_treads_per_type (int) : Nombre maximal de threads à lancer par type de relation (par défaut : 4).
-        - max_thread_per_branch (int) : Nombre maximal de threads pour explorer chaque branche de la recherche (par défaut : 10).
         """
 
 		self.api = api
@@ -63,6 +66,8 @@ class RelationInferer:
 			else:
 				inf.score = 0.0
 
+			annotation_weight = inf.annotation_weight1 * inf.annotation_weight2
+			inf.score *= annotation_weight
 
 	async def inference_by_generalization(self, sujet: Term, objet: Term, final_rel_id: int):
 		params = self.default_params.copy()
@@ -76,16 +81,26 @@ class RelationInferer:
 		
 
 		async def get_final_rel(rel):
-			final_rel = await sujet.relation_with(rel.objet, params)
-			if final_rel.relations:
+			await rel.get_annotation(self.api)
+			rel_annotation_weight = rel.get_annotation_weight()
+
+			result = await sujet.relation_with(rel.objet, params)
+			if result.relations:
+				final_relation = result.relations[0]
+				await final_relation.get_annotation(self.api)
+				final_annotation_weight = final_relation.get_annotation_weight()
+		
 				return Inference(
 					sujet=sujet.name,
 					gen=rel.objet.name,
 					objet=objet.name,
 					weight1=rel.w,
-					weight2=final_rel.relations[0].w,
+					weight2=final_relation.w,
 					t="isa",
-					rel=final_rel.relations[0].relation_type.name,
+					rel=final_relation.relation_type.name,
+
+					annotation_weight1=rel_annotation_weight,
+					annotation_weight2=final_annotation_weight,
 				)
 			return None
 
@@ -107,24 +122,41 @@ class RelationInferer:
 		params.types_ids = [final_rel_id]
 		
 		async def get_final_rel(rel):
-			final_rel = await rel.objet.relation_with(objet, params)
-			if final_rel.relations:
+			await rel.get_annotation(self.api)
+			rel_annotation_weight = rel.get_annotation_weight()
+
+			result = await rel.objet.relation_with(objet, params)
+			if result.relations:
+				final_relation = result.relations[0]
+				await final_relation.get_annotation(self.api)
+				final_annotation_weight = final_relation.get_annotation_weight()
+
 				return Inference(
 					sujet=sujet.name,
 					gen=rel.objet.name,
 					objet=objet.name,
 					weight1=rel.w,
-					weight2=final_rel.relations[0].w,
+					weight2=final_relation.w,
 					t="hypo",
-					rel=final_rel.relations[0].relation_type.name,
+					rel=final_relation.relation_type.name,
+
+					annotation_weight1=rel_annotation_weight,
+					annotation_weight2=final_annotation_weight,
 				)
 			return None
 
 		tasks = [get_final_rel(rel) for rel in r_hypo_rel]
 		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
-		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
-
+		inferences = []
+		for i, result in enumerate(results):
+			if isinstance(result, Exception):
+				method_names = ["generalization", "specialization", "transitivity"]
+				logging.error(f"Erreur dans inference_by_{method_names[i]}: {type(result).__name__}: {result}")
+				logging.error(f"Traceback: {''.join(traceback.format_exception(type(result), result, result.__traceback__))}")
+			else:
+				inferences.extend(result)
+		
 		return inferences
 
 	async def inference_by_transitivity(self, sujet: Term, objet: Term, final_rel_id: int):
@@ -135,16 +167,26 @@ class RelationInferer:
 		r_trans_rel = sorted(r_trans_rel.relations, key=lambda r: r.w, reverse=True)
 		
 		async def get_final_rel(rel):
-			final_rel = await rel.objet.relation_with(objet, params)
-			if final_rel.relations:
+			await rel.get_annotation(self.api)
+			rel_annotation_weight = rel.get_annotation_weight()
+
+			result = await rel.objet.relation_with(objet, params)
+			if result.relations:
+				final_relation = result.relations[0]
+				await final_relation.get_annotation(self.api)
+				final_annotation_weight = final_relation.get_annotation_weight()
+				
 				return Inference(
 					sujet=sujet.name,
 					gen=rel.objet.name,
 					objet=objet.name,
 					weight1=rel.w,
-					weight2=final_rel.relations[0].w,
+					weight2=final_relation.w,
 					t="transitivity",
-					rel=final_rel.relations[0].relation_type.name,
+					rel=final_relation.relation_type.name,
+
+					annotation_weight1=rel_annotation_weight,
+					annotation_weight2=final_annotation_weight,
 				)
 			return None
 
@@ -161,8 +203,8 @@ class RelationInferer:
 
 		tasks = [
 			self.inference_by_generalization(sujet, objet, rel_id),
-			self.inference_by_specialization(sujet, objet, rel_id),
-			self.inference_by_transitivity(sujet, objet, rel_id),
+			# self.inference_by_specialization(sujet, objet, rel_id),
+			# self.inference_by_transitivity(sujet, objet, rel_id),
 		]
 		
 		results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -198,7 +240,7 @@ class RelationInferer:
 	
 		# TODO : [x] Multi-thread pour chaque type
 		# TODO : [x] Multi-thread pour chaque chemin par type
-		# TODO : [ ] Prendre en compte les annotations (pour que ce soit des modifier de notes)
+		# TODO : [x] Prendre en compte les annotations (pour que ce soit des modifier de notes)
 		# TODO : [ ] Faire les 5 inférences (isa, hypo, transitivity, syn, 
 		# TODO : [ ] Faire un meilleur formatage
 		# TODO : [x] 2 type de logger un pour le bot, l'autre pour le cli
