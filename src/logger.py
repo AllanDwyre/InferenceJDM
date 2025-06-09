@@ -47,12 +47,12 @@ class InferenceLogger:
 
 		if inference.t in {"isa",}:
 			line.append(term2, style="bold yellow")
-			line.append(f" {inference.rel:<6}", style="italic dim")
+			line.append(f" {inference.rel:<7}", style="italic dim")
 			line.append(f" {arrow} ")
 			line.append(f"{inference.gen:>{max_middle}}", style="bold cyan")
 		else :
 			line.append(f"{inference.gen:<{max_middle}}", style="bold cyan")
-			line.append(f" {inference.rel:<6}", style="italic dim")
+			line.append(f" {inference.rel:<7}", style="italic dim")
 			line.append(f" {arrow} ")
 			line.append(term2, style="bold yellow")
 		# Score
@@ -113,8 +113,8 @@ class InferenceLoggerBot(InferenceLogger):
 			message = (
 				f"```\n"
 				f"{idx:>3}. ✅ oui | "
-				f"{term1} {middle_rel:<6} {arrow} "
-				f"{inference.gen:<{max_middle}} {term2} {inference.rel:<6} {arrow} "
+				f"{term1} {middle_rel:<7} {arrow} "
+				f"{inference.gen:<{max_middle}} {term2} {inference.rel:<7} {arrow} "
 				f"{inference.gen:>{max_middle}} | {score_emoji} {inference.score:<.2f}\n"
 				f"```"
 			)
@@ -122,8 +122,8 @@ class InferenceLoggerBot(InferenceLogger):
 			message = (
 				f"```\n"
 				f"{idx:>3}. ✅ oui | "
-				f"{term1} {middle_rel:<6} {arrow} "
-				f"{inference.gen:^{max_middle}} {inference.rel:<6} {arrow} "
+				f"{term1} {middle_rel:<7} {arrow} "
+				f"{inference.gen:^{max_middle}} {inference.rel:<7} {arrow} "
 				f"{term2} | {score_emoji} {inference.score:<.2f}\n"
 				f"```"
 			)
