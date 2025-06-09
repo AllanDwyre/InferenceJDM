@@ -31,7 +31,7 @@ class InferenceLogger:
 
 		# Explication : sujet ➝ gen ; gen ➝ obj
 		size = max(len(inference.sujet),len(inference.objet))
-		if inference.t in {"isa",""}: # cas spécial
+		if inference.t in {"isa",}: # cas spécial
 			term1 = f"{inference.objet:<{size}}"
 			term2 = f"{inference.sujet:<{size}}"
 		else:
@@ -45,10 +45,16 @@ class InferenceLogger:
 		line.append(f" {arrow} ")
 		line.append(f"{inference.gen:<45}", style="bold cyan")
 
-		line.append(f"{inference.gen:<45}", style="bold cyan")
-		line.append(f" {inference.rel:<5}", style="italic dim")
-		line.append(f" {arrow} ")
-		line.append(term2, style="bold yellow")
+		if inference.t in {"isa",}:
+			line.append(term2, style="bold yellow")
+			line.append(f" {inference.rel:<5}", style="italic dim")
+			line.append(f" {arrow} ")
+			line.append(f"{inference.gen:>45}", style="bold cyan")
+		else :
+			line.append(f"{inference.gen:<45}", style="bold cyan")
+			line.append(f" {inference.rel:<5}", style="italic dim")
+			line.append(f" {arrow} ")
+			line.append(term2, style="bold yellow")
 		# Score
 		line.append(" | ")
 
