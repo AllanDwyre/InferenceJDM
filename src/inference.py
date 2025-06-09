@@ -277,6 +277,6 @@ class RelationInferer:
 		# TODO : [x] Multi-thread pour chaque chemin par type
 		# TODO : [x] Prendre en compte les annotations (pour que ce soit des modifier de notes)
 		# TODO : [x] Faire les 4 inférences (isa, hypo, transitivity, syn) 
-		# TODO : [ ] Faire un meilleur formatage
+		# TODO : [x] Faire un meilleur formatage
 		# TODO : [x] 2 type de logger un pour le bot, l'autre pour le cli
 		# TODO : [x] Mettre sur github
