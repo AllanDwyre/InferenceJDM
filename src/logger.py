@@ -17,7 +17,7 @@ class InferenceLogger:
 		line.append("➤  non", style="bold red")
 		self.console.print(line)
 
-	def _render_single_inference(self, idx, inference):
+	def _render_single_inference(self, idx, inference, max_middle = 45):
 		arrow = "➝ "
 		# Texte de la ligne
 		line = Text()
@@ -43,15 +43,15 @@ class InferenceLogger:
 		line.append(term1, style="bold magenta")
 		line.append(f" {middle_rel:<5}", style="italic dim")
 		line.append(f" {arrow} ")
-		line.append(f"{inference.gen:<45}", style="bold cyan")
+		line.append(f"{inference.gen:<{max_middle}}", style="bold cyan")
 
 		if inference.t in {"isa",}:
 			line.append(term2, style="bold yellow")
 			line.append(f" {inference.rel:<5}", style="italic dim")
 			line.append(f" {arrow} ")
-			line.append(f"{inference.gen:>45}", style="bold cyan")
+			line.append(f"{inference.gen:>{max_middle}}", style="bold cyan")
 		else :
-			line.append(f"{inference.gen:<45}", style="bold cyan")
+			line.append(f"{inference.gen:<{max_middle}}", style="bold cyan")
 			line.append(f" {inference.rel:<5}", style="italic dim")
 			line.append(f" {arrow} ")
 			line.append(term2, style="bold yellow")
@@ -73,8 +73,9 @@ class InferenceLogger:
 			self._render_no_result()
 			return
 		
+		max_middle = len(max(inferences, key=lambda x: len(x.gen)).gen) + 10
 		for idx, inferred in enumerate(inferences, 1):
-			self._render_single_inference(idx, inferred)
+			self._render_single_inference(idx, inferred, max_middle)
 
 class InferenceLoggerBot(InferenceLogger):
 	def __init__(self, context, verbose = False):
@@ -90,7 +91,7 @@ class InferenceLoggerBot(InferenceLogger):
 			super()._render_no_result()
 		self.messages.append("```\n1. ➤ non\n```")
 
-	def _render_single_inference(self, idx, inference):
+	def _render_single_inference(self, idx, inference, max_middle=40):
 		"""Override pour Discord avec formatage markdown"""
 		if(self.verbose):
 			super()._render_single_inference(idx, inference)
@@ -108,15 +109,24 @@ class InferenceLoggerBot(InferenceLogger):
 		
 		middle_rel = inference.t if (inference.t != "transitivity") else inference.rel
 
-		message = (
-			f"```\n"
-			f"{idx:>3}. ✅ oui | "
-			f"{term1} {middle_rel:<5} {arrow} "
-			f"{inference.gen:^40} {inference.rel:<5} {arrow} "
-			f"{term2} | {score_emoji} {inference.score:<.2f}\n"
-			f"```"
-		)
-
+		if inference.t in {"isa",""}:
+			message = (
+				f"```\n"
+				f"{idx:>3}. ✅ oui | "
+				f"{term1} {middle_rel:<5} {arrow} "
+				f"{inference.gen:<{max_middle}} {term2} {inference.rel:<5} {arrow} "
+				f"{inference.gen:>{max_middle}} | {score_emoji} {inference.score:<.2f}\n"
+				f"```"
+			)
+		else:
+			message = (
+				f"```\n"
+				f"{idx:>3}. ✅ oui | "
+				f"{term1} {middle_rel:<5} {arrow} "
+				f"{inference.gen:^{max_middle}} {inference.rel:<5} {arrow} "
+				f"{term2} | {score_emoji} {inference.score:<.2f}\n"
+				f"```"
+			)
 		self.messages.append(message)
 
 	async def send_all(self):
