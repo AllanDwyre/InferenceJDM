@@ -6,4 +6,5 @@
 database
 
 # Pas besoin du cache
-__pycache__
+__pycache__/
+*.pyc
