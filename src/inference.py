@@ -111,6 +111,48 @@ class RelationInferer:
 		
 		return inferences
 
+	async def inference_by_generalization_inverted(self, sujet: Term, objet: Term, final_rel_id: int):
+		params = self.default_params.copy()
+		params.types_ids = [self.api.get_relation_type_by_name("r_isa").id]
+
+		r_isa_rel = await sujet.get_relations(params=params)
+		r_isa_rel = sorted(r_isa_rel.relations, key=lambda r: r.w, reverse=True)
+
+		params = self.default_params.copy()
+		params.types_ids = [final_rel_id]
+		
+
+		async def get_final_rel(rel):
+			await rel.get_annotation(self.api)
+			rel_annotation_weight = rel.get_annotation_weight()
+
+			result = await rel.objet.relation_with(objet, params)
+			if result.relations:
+				final_relation = result.relations[0]
+				await final_relation.get_annotation(self.api)
+				final_annotation_weight = final_relation.get_annotation_weight()
+		
+				return Inference(
+					sujet=sujet.name,
+					gen=rel.objet.name,
+					objet=objet.name,
+					weight1=rel.w,
+					weight2=final_relation.w,
+					t="isa",
+					rel=final_relation.relation_type.name,
+
+					annotation_weight1=rel_annotation_weight,
+					annotation_weight2=final_annotation_weight,
+				)
+			return None
+
+		tasks = [get_final_rel(rel) for rel in r_isa_rel]
+		results = await asyncio.gather(*tasks, return_exceptions=True)
+		
+		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
+		
+		return inferences
+	
 	async def inference_by_specialization(self, sujet: Term, objet: Term, final_rel_id: int):
 		params = self.default_params.copy()
 		params.types_ids = [self.api.get_relation_type_by_name("r_hypo").id]
@@ -237,6 +279,7 @@ class RelationInferer:
 
 		tasks = [
 			self.inference_by_generalization(sujet, objet, rel_id),
+			self.inference_by_generalization_inverted(sujet, objet, rel_id),
 			self.inference_by_specialization(sujet, objet, rel_id),
 			self.inference_by_transitivity(sujet, objet, rel_id),
 			self.inference_by_synonymy(sujet, objet, rel_id),
