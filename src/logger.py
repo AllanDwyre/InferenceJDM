@@ -31,15 +31,17 @@ class InferenceLogger:
 
 		# Explication : sujet ➝ gen ; gen ➝ obj
 		size = max(len(inference.sujet),len(inference.objet))
-		if inference.t == "hypo":
-			term1 = f"{inference.sujet:<{size}}"
-			term2 = f"{inference.objet:<{size}}"
-		else:
+		if inference.t in {"isa",""}: # cas spécial
 			term1 = f"{inference.objet:<{size}}"
 			term2 = f"{inference.sujet:<{size}}"
+		else:
+			term1 = f"{inference.sujet:<{size}}"
+			term2 = f"{inference.objet:<{size}}"
+		
+		middle_rel = inference.t if (inference.t != "transitivity") else inference.rel
 
 		line.append(term1, style="bold magenta")
-		line.append(f" {inference.t:<5}", style="italic dim")
+		line.append(f" {middle_rel:<5}", style="italic dim")
 		line.append(f" {arrow} ")
 		line.append(f"{inference.gen:<45}", style="bold cyan")
 
@@ -91,18 +93,20 @@ class InferenceLoggerBot(InferenceLogger):
 		arrow = "➝ "
 
 		size = max(len(inference.sujet),len(inference.objet))
-		if inference.t == "hypo":
-			term1 = f"{inference.sujet:<{size}}"
-			term2 = f"{inference.objet:<{size}}"
-		else:
+		if inference.t in {"isa",""}: # cas spécial
 			term1 = f"{inference.objet:<{size}}"
 			term2 = f"{inference.sujet:<{size}}"
+		else:
+			term1 = f"{inference.sujet:<{size}}"
+			term2 = f"{inference.objet:<{size}}"
+		
+		middle_rel = inference.t if (inference.t != "transitivity") else inference.rel
 
 		message = (
 			f"```\n"
 			f"{idx:>3}. ✅ oui | "
-			f"{term1} {inference.t:<5} {arrow} "
-			f"{inference.gen:<45} {inference.rel} {arrow} "
+			f"{term1} {middle_rel:<40} {arrow} "
+			f"{inference.gen:<40} {inference.rel} {arrow} "
 			f"{term2} | {score_emoji} {inference.score:<.2f}\n"
 			f"```"
 		)

@@ -34,26 +34,39 @@ async def main_console() -> None:
 	async with JdmApi() as api:
 		inferer = RelationInferer(api=api)
 		while(True):
-			sentence = input("Enter a sentence (word1 r_relation word2): ").strip() or "pizza r_has_part mozza"
-			parsed_sentence = parse_input(sentence)
 
-			if not parsed_sentence:
-				print("Invalid input format. Please use 'word1 r_relation word2'.")
-				continue
+			try:
+				sentence = input("Enter a sentence (word1 r_relation word2): ").strip() or "pizza r_has_part mozza"
+				parsed_sentence = parse_input(sentence)
+
+				if not parsed_sentence:
+					print("Invalid input format. Please use 'word1 r_relation word2'.")
+					continue
+				
+				sujet, rel, objet = parsed_sentence
+
+				rprint(f"[bold blue]Parsed Sentence:[/bold blue] {sujet} {rel} {objet}")
+
+				# Check if the relation is valid
+				rel_type = api.get_relation_type_by_name(rel)
+				if not rel_type:
+					rprint(f"[red]Relation '{rel}' not found in the API.[/red]")
+					continue
+
+				start = time.time()
+				await inferer.run(sujet, rel, objet)
+				print(f"Temps d'exécution : {time.time() - start:.4f} secondes")
+
+
+			except TermNotFoundError as e:
+				if e.status_code == 500:
+					rprint(f"❌ [bold]Erreur serveur[/bold]: Le terme `{e.term_name}` a causé une erreur interne (500). Il pourrait ne pas exister ou contenir des caractères spéciaux.")
+				else:
+					rprint(f"❌ [bold]Terme non trouvé[/bold]: `{e.term_name}` n'existe pas dans la base de données.")
+			except SystemExit:
+				rprint("Erreur de syntaxe dans la commande.")
+				
 			
-			sujet, rel, objet = parsed_sentence
-
-			rprint(f"[bold blue]Parsed Sentence:[/bold blue] {sujet} {rel} {objet}")
-
-			# Check if the relation is valid
-			rel_type = api.get_relation_type_by_name(rel)
-			if not rel_type:
-				rprint(f"[red]Relation '{rel}' not found in the API.[/red]")
-				continue
-
-			start = time.time()
-			await inferer.run(sujet, rel, objet)
-			print(f"Temps d'exécution : {time.time() - start:.4f} secondes")
 
 
 # ------------------- BOT FUNC ------------------------
