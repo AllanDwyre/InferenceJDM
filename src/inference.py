@@ -108,7 +108,7 @@ class RelationInferer:
 		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
 		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
-
+		
 		return inferences
 
 	async def inference_by_specialization(self, sujet: Term, objet: Term, final_rel_id: int):
@@ -148,14 +148,7 @@ class RelationInferer:
 		tasks = [get_final_rel(rel) for rel in r_hypo_rel]
 		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
-		inferences = []
-		for i, result in enumerate(results):
-			if isinstance(result, Exception):
-				method_names = ["generalization", "specialization", "transitivity"]
-				logging.error(f"Erreur dans inference_by_{method_names[i]}: {type(result).__name__}: {result}")
-				logging.error(f"Traceback: {''.join(traceback.format_exception(type(result), result, result.__traceback__))}")
-			else:
-				inferences.extend(result)
+		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
 		
 		return inferences
 
@@ -194,17 +187,59 @@ class RelationInferer:
 		results = await asyncio.gather(*tasks, return_exceptions=True)
 		
 		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
-
+		
 		return inferences
 	
+	async def inference_by_synonymy(self, sujet: Term, objet: Term, final_rel_id: int):
+		params = self.default_params.copy()
+		params.types_ids = [self.api.get_relation_type_by_name("r_syn").id]
+
+		r_syn_rel = await sujet.get_relations(params=params)
+		r_syn_rel = sorted(r_syn_rel.relations, key=lambda r: r.w, reverse=True)
+		
+		params = self.default_params.copy()
+		params.types_ids = [final_rel_id]
+		
+		async def get_final_rel(middle_rel):
+			await middle_rel.get_annotation(self.api)
+			rel_annotation_weight = middle_rel.get_annotation_weight()
+
+			result = await middle_rel.objet.relation_with(objet, params)
+			if result.relations:
+				final_relation = result.relations[0]
+				await final_relation.get_annotation(self.api)
+				final_annotation_weight = final_relation.get_annotation_weight()
+
+				return Inference(
+					sujet=sujet.name,
+					gen=middle_rel.objet.name,
+					objet=objet.name,
+					weight1=middle_rel.w,
+					weight2=final_relation.w,
+					t="syn",
+					rel=final_relation.relation_type.name,
+
+					annotation_weight1=rel_annotation_weight,
+					annotation_weight2=final_annotation_weight,
+				)
+			return None
+
+		tasks = [get_final_rel(rel) for rel in r_syn_rel]
+		results = await asyncio.gather(*tasks, return_exceptions=True)
+		
+		inferences = [r for r in results if r is not None and not isinstance(r, Exception)]
+		
+		return inferences
+
 	async def run_all_inferences(self, sujet, objet, rel_id):
 		sujet.api = self.api
 		objet.api = self.api
 
 		tasks = [
 			self.inference_by_generalization(sujet, objet, rel_id),
-			# self.inference_by_specialization(sujet, objet, rel_id),
-			# self.inference_by_transitivity(sujet, objet, rel_id),
+			self.inference_by_specialization(sujet, objet, rel_id),
+			self.inference_by_transitivity(sujet, objet, rel_id),
+			self.inference_by_synonymy(sujet, objet, rel_id),
 		]
 		
 		results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -215,7 +250,7 @@ class RelationInferer:
 				print(f"Erreur: {result}")
 			else:
 				inferences.extend(result)
-		
+
 		return inferences
 	
 	async def run(self, sujet_name:str, relation_name:str, objet_name:str) -> None:
@@ -241,10 +276,7 @@ class RelationInferer:
 		# TODO : [x] Multi-thread pour chaque type
 		# TODO : [x] Multi-thread pour chaque chemin par type
 		# TODO : [x] Prendre en compte les annotations (pour que ce soit des modifier de notes)
-		# TODO : [ ] Faire les 5 inférences (isa, hypo, transitivity, syn, 
+		# TODO : [x] Faire les 4 inférences (isa, hypo, transitivity, syn) 
 		# TODO : [ ] Faire un meilleur formatage
 		# TODO : [x] 2 type de logger un pour le bot, l'autre pour le cli
 		# TODO : [x] Mettre sur github
-
-		# transitive direct, indirect, subjective, inductive
-		# annotation : 
