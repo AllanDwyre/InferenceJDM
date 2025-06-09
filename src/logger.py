@@ -46,7 +46,7 @@ class InferenceLogger:
 		line.append(f"{inference.gen:<45}", style="bold cyan")
 
 		line.append(f"{inference.gen:<45}", style="bold cyan")
-		line.append(f" {inference.rel}", style="italic dim")
+		line.append(f" {inference.rel:<5}", style="italic dim")
 		line.append(f" {arrow} ")
 		line.append(term2, style="bold yellow")
 		# Score
@@ -105,8 +105,8 @@ class InferenceLoggerBot(InferenceLogger):
 		message = (
 			f"```\n"
 			f"{idx:>3}. ✅ oui | "
-			f"{term1} {middle_rel:<40} {arrow} "
-			f"{inference.gen:<40} {inference.rel} {arrow} "
+			f"{term1} {middle_rel:<5} {arrow} "
+			f"{inference.gen:^40} {inference.rel:<5} {arrow} "
 			f"{term2} | {score_emoji} {inference.score:<.2f}\n"
 			f"```"
 		)
